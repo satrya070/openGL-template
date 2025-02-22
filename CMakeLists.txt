@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 
 include_directories(external/glfw/include)
-#find_library(GLFW_LIBRARY glfw3 PATHS ${CMAKE_SOURCE_DIR}/external/glfw/lib-vc2022)
+#find_library(GLFW_LIBRARY glfw3 PATHS ${CMAKE_SOURCE_DIR}/external/glfw/lib-vc2022)h
 set(GLFW_LIBRARY ${CMAKE_SOURCE_DIR}/external/glfw/lib-vc2022/glfw3.lib)  # add glfw
 include_directories(external/glad/include)  # add glad
 add_library(glad STATIC external/glad/src/glad.c)
