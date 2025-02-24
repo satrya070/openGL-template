@@ -77,7 +77,7 @@ int main()
 
     // load texture
     unsigned int diffuseMap = loadTexture("../../../resources/textures/brickwall.jpg");
-    
+    unsigned int normalMap = loadTexture("../../../resources/textures/brickwall_normal.jpg");
 
     // basic triangle stuff
     float vertices[] = {
@@ -102,6 +102,7 @@ int main()
     
     shader.use();
     shader.setInt("diffuseMap", 0);
+    shader.setInt("normalMap", 1);
 
     // light data
     glm::vec3 lightPos(0.5f, 1.0f, 0.3f);
@@ -131,14 +132,11 @@ int main()
         shader.setMat4("view", view);
         shader.setMat4("model", model);
 
-        
-        //glBindVertexArray(VAO);
-        //glDrawArrays(GL_TRIANGLES, 0, 3);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, diffuseMap);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, normalMap);
         renderQuad();
-
-
 
         //std::cout << "position: " << glm::to_string(camera.Position) << ", yaw: " << camera.Yaw << ", pitch: " << camera.Pitch << std::endl;
 
@@ -271,11 +269,15 @@ void renderQuad() {
     glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(8 * sizeof(float)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 14 * sizeof(float), (void*)(11 * sizeof(float)));
 
     glBindVertexArray(quadVAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
