@@ -2,13 +2,11 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
-#define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "imgui.h"
 #include "shader.h"
 #include <glm/gtx/string_cast.hpp>
-#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <vector>
 
@@ -49,6 +47,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
@@ -99,6 +98,10 @@ int main()
 
 
     // --- lights
+    shader.use();
+    shader.setVec3("albedo", 0.5f, 0.0f, 0.0f);
+    shader.setFloat("ao", 1.0f);
+
     glm::vec3 lightPositions[] = {
         glm::vec3(-10.0f,  10.0f, 10.0f),
         glm::vec3(10.0f,  10.0f, 10.0f),
@@ -114,29 +117,26 @@ int main()
     int nrRows = 7;
     int nrColumns = 7;
     float spacing = 2.5;
-    
-    shader.use();
-    shader.setVec3("albedo", 0.5f, 0.0f, 0.0f);
-    shader.setFloat("ao", 1.0f);
+   
 
-    glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), ((float)WIDTH / (float)HEIGHT), 0.1f, 100000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), ((float)WIDTH / (float)HEIGHT), 0.1f, 100.0f);
+    shader.use();
     shader.setMat4("projection", projection);
  
 
     while (!glfwWindowShouldClose(window))
     {
-        float currentFrame = glfwGetTime();
+        float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
         processInput(window);
 
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glm::mat4 view = camera.GetViewMatrix();
         
         shader.use();
+        glm::mat4 view = camera.GetViewMatrix();
         shader.setMat4("view", view);
         shader.setVec3("camPos", camera.Position);
 
@@ -147,17 +147,18 @@ int main()
             shader.setFloat("metallic", (float)row / (float)nrRows);
             for (int col = 0; col < nrColumns; ++col)
             {
-                // clamp rougness to 0.05 - 1.0 as perfectly smooth surface(roughness: 0.0) tend to look off with direct lighting
+                // we clamp the roughness to 0.05 - 1.0 as perfectly smooth surfaces (roughness of 0.0) tend to look a bit off
+                // on direct lighting.
                 shader.setFloat("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
 
                 model = glm::mat4(1.0f);
                 model = glm::translate(model, glm::vec3(
                     (col - (nrColumns / 2)) * spacing,
                     (row - (nrRows / 2)) * spacing,
-                    0.0
+                    0.0f
                 ));
                 shader.setMat4("model", model);
-                shader.setMat4("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
+                shader.setMat3("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
                 renderSphere();
             }
         }
@@ -168,13 +169,13 @@ int main()
             glm::vec3 newPos = lightPositions[i] + glm::vec3(sin(glfwGetTime() * 5.0) * 5.0, 0.0, 0.0);
             newPos = lightPositions[i];
             shader.setVec3("lightPositions[" + std::to_string(i) + "]", newPos);
-            shader.setVec3("lightColros[" + std::to_string(i) + "]", lightColors[i]);
+            shader.setVec3("lightColors[" + std::to_string(i) + "]", lightColors[i]);
 
             model = glm::mat4(1.0f);
             model = glm::translate(model, newPos);
             model = glm::scale(model, glm::vec3(0.5f));
             shader.setMat4("model", model);
-            shader.setMat4("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
+            shader.setMat3("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
             renderSphere();
         }
 
@@ -274,9 +275,9 @@ void renderSphere()
         }
 
         bool oddRow = false;
-        for (unsigned int y = 0; y < Y_SEGMENTS + 1; ++y)
+        for (unsigned int y = 0; y < Y_SEGMENTS; ++y)
         {
-            if (!oddRow)
+            if (!oddRow) // even rows: y == 0, y == 2; and so on
             {
                 for (unsigned int x = 0; x <= X_SEGMENTS; ++x)
                 {
@@ -314,7 +315,6 @@ void renderSphere()
                 data.push_back(uv[i].y);
             }
         }
-
         glBindVertexArray(sphereVAO);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), &data[0], GL_STATIC_DRAW);
