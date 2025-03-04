@@ -71,9 +71,10 @@ int main()
 
     // gl settings
     glEnable(GL_DEPTH_TEST);
+    //glPolygonMode(GL_FRONT, GL_LINE);
 
     Shader shader = Shader("../../../shaders/vertex_shader.txt", "../../../shaders/fragment_shader.txt");
-    Shader screenShader = Shader("../../../shaders/fbo_vertex_shader.txt", "../../../shaders/fbo_fragment_shader.tx");
+    Shader screenShader = Shader("../../../shaders/fbo_vertex_shader.txt", "../../../shaders/fbo_fragment_shader.txt");
 
     // basic triangle stuff
     float vertices[] = {
@@ -243,7 +244,7 @@ int main()
         glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default framebuffer
         glDisable(GL_DEPTH_TEST); // disable depth test so screen space quad isnt discarded due to depth test
         // clear all relevant buffer
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         screenShader.use();
