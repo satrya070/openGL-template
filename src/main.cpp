@@ -129,15 +129,15 @@ int main()
         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
     };
 
-    float quadVertices[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
+    float quadVertices[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates. NOTE that this plane is now much smaller and at the top of the screen
         // positions   // texCoords
         -1.0f,  1.0f,  0.0f, 1.0f,
-        -1.0f, -1.0f,  0.0f, 0.0f,
-         1.0f, -1.0f,  1.0f, 0.0f,
+        -1.0f,  0.55f,  0.0f, 0.0f,
+        -0.4f,  0.55f,  1.0f, 0.0f,
 
         -1.0f,  1.0f,  0.0f, 1.0f,
-         1.0f, -1.0f,  1.0f, 0.0f,
-         1.0f,  1.0f,  1.0f, 1.0f
+        -0.4f,  0.55f,  1.0f, 0.0f,
+        -0.4f,  1.0f,  1.0f, 1.0f
     };
 
     unsigned int cubeTexture = loadTexture("../../../textures/container.jpg");
@@ -216,16 +216,20 @@ int main()
 
         // first pass
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-        glEnable(GL_DEPTH_TEST);;
+        glEnable(GL_DEPTH_TEST); // enable depth testing again as it is disable for the screenspace quad
 
         // clear custom framebuffer contents
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClearColor(0.4f, 0.4f, 0.4f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // not using the stencil buffer
 
         shader.use();
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), ((float)WIDTH / (float)HEIGHT), 0.1f, 100.0f);
         glm::mat4 model = glm::mat4(1.0);
+        camera.Yaw += 180.f;
+        camera.ProcessMouseMovement(0, 0, false); // make sure it updates its camera vectors, but disable pitch constrains(otherwise can reverse camera pitch values)
         glm::mat4 view = camera.GetViewMatrix();
+        camera.Yaw -= 180.0f; //  reset back to original oreintation
+        camera.ProcessMouseMovement(0, 0, true);
         shader.setMat4("projection", projection);
         shader.setMat4("view", view);
 
@@ -240,12 +244,26 @@ int main()
         glBindVertexArray(0);
         //std::cout << "position: " << glm::to_string(camera.Position) << ", yaw: " << camera.Yaw << ", pitch: " << camera.Pitch << std::endl;
 
+        // SECOND PASS --- draw as normal
         // bind back to default framebuffer and draw a quad plane with the attached framebuufer color texture
         glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default framebuffer
-        glDisable(GL_DEPTH_TEST); // disable depth test so screen space quad isnt discarded due to depth test
-        // clear all relevant buffer
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(0.1f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        model = glm::mat4(1.0);
+        view = camera.GetViewMatrix();
+        shader.setMat4("view", view);
+
+        // draw cube VAO as normal now
+        glBindVertexArray(VAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, cubeTexture);
+        model = glm::translate(model, glm::vec3(-1.0, 0.0f, -1.0));
+        shader.setMat4("model", model);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // now draw the mirror quad with screen texture
+        glDisable(GL_DEPTH_TEST);
 
         screenShader.use();
         glBindVertexArray(quadVAO);
