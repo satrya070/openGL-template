@@ -79,6 +79,7 @@ int main()
     Shader equirectangularShader = Shader("../../../shaders/cubemap_vertex.txt", "../../../shaders/equi_cube_fragment.txt");
     Shader irradianceShader = Shader("../../../shaders/cubemap_vertex.txt", "../../../shaders/irradiance_convolution_shader.txt");
     Shader backgroundShader = Shader("../../../shaders/background_vertex.txt", "../../../shaders/background_fragment.txt");
+    Shader prefilterShader = Shader("../../../shaders/cubemap_vertex.txt", "../../../shaders/prefilter_fragment.txt");
 
     // --- lights
     pbrShader.use();
@@ -221,6 +222,51 @@ int main()
         renderCube();
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    
+    // pre filter map for specular IBL ---------------------
+    unsigned int prefilterMap;
+    glGenTextures(1, &prefilterMap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap);
+    for (unsigned int i = 0; i < 6; ++i) {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 128, 128, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // generate mipmaps for cubemap texture to opengl can automatically allocate the required memory
+    glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+    // ------ pbr: run quasi monte-carlo sumulation on the environment lighting to create a prefilter (cube)map
+    prefilterShader.use();
+    prefilterShader.setInt("environmentMap", 0);
+    prefilterShader.setMat4("projection", captureProjection);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    unsigned int maxMipLevels = 5;
+    for (unsigned int mip = 0; mip < maxMipLevels; ++mip)
+    {
+        // resize framebuffer according to mipmap size
+        unsigned int mipWidth = 128 * std::pow(0.5, mip);
+        unsigned int mipHeight = 128 * std::pow(0.5, mip);
+        glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mipWidth, mipHeight);
+        glViewport(0, 0, mipWidth, mipHeight);
+
+        float roughness = (float)mip / (float)(maxMipLevels - 1);
+        prefilterShader.setFloat("roughness", roughness);
+        for (unsigned int i = 0; i < 6; ++i)
+        {
+            prefilterShader.setMat4("view", captureViews[i]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, prefilterMap, mip);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            renderCube();
+        }
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // init static shader uniforms before rendering
     glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
@@ -259,11 +305,15 @@ int main()
         // bind pre-computed IBL data
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap);
 
         // render rows * column number of spheres with metallic/roughness values scaled by row/col
         glm::mat4 model = glm::mat4(1.0f);
         for (int row = 0; row < nrRows; ++row)
         {
+            // we clamp the roughness to 0.025 - 1.0  as perfectly smooth surface(roughness 0.0) tend to look a bit off
+            // on direct lighting
             pbrShader.setFloat("metallic", (float)row / (float)nrRows);
             for (int col = 0; col < nrColumns; ++col)
             {
@@ -283,7 +333,9 @@ int main()
             }
         }
 
-        // render light sources
+        // render light sources ----------------
+        // simply re-render sphere at light positions
+        // this looks a bit off as we use the same shader, but itll make their positions obvious and keeps the code small
         for (unsigned int i = 0; i < sizeof(lightPositions) / sizeof(lightPositions[0]); ++i)
         {
             glm::vec3 newPos = lightPositions[i] + glm::vec3(sin(glfwGetTime() * 5.0) * 5.0, 0.0, 0.0);
@@ -298,15 +350,16 @@ int main()
             pbrShader.setMat3("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
             renderSphere();
         }
-
         //std::cout << "position: " << glm::to_string(camera.Position) << ", yaw: " << camera.Yaw << ", pitch: " << camera.Pitch << std::endl;
 
         //draw environment/background/skybox
         backgroundShader.use();
         backgroundShader.setMat4("view", view);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+        //glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
         //glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap); // display irradiance map
+        //prefilterShader.setInt("environmentMap", 1);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap); // display prefilter map
         renderCube();
 
         glfwSwapBuffers(window);
